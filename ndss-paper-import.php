@@ -93,24 +93,24 @@ function ndss_button_action() {
     echo '<p>NDSS data import complete.</p>';
     echo '</div>';
 
-    $path = 'test-button-log.txt';
+    // $path = __DIR__ . '/test-button-log.txt';
 
-    $handle = fopen($path,"w");
+    // $handle = fopen($path,"w");
 
-    if ($handle == false) {
-        echo '<p>Could not write the log file to the temporary directory: ' . $path . '</p>';
-    }
-    else {
-        echo '<p>Log written to: ' . $path . '</p>';
+    // if ($handle == false) {
+    //     echo '<p>Could not write the log file to the temporary directory: ' . $path . '</p>';
+    // }
+    // else {
+    //     echo '<p>Log written to: ' . $path . '</p>';
 
-        fwrite ($handle , "Call Function button clicked on: " . date("D j M Y H:i:s", time())); 
-        fclose ($handle);
-    }
+    //     fwrite ($handle , "Call Function button clicked on: " . date("D j M Y H:i:s", time())); 
+    //     fclose ($handle);
+    // }
 
     //Mass import json data into custom fields
     // $json_feed = 'http://localhost/wordpress/wp-content/anrw17-data.json';
     $json_feed = 'ndss19-data.json';
-	$json      = file_get_contents(__DIR__ . $json_feed );
+	$json      = file_get_contents(__DIR__ . '/' . $json_feed );
 	$objs      = json_decode( $json, true );
 	$wp_error  = true;
 	$post_id   = - 1;
@@ -123,9 +123,15 @@ function ndss_button_action() {
 	    $authors = $obj['authors'];
 	    $index = 0;
 	    foreach( $authors as $author ) {
-		    ${'paper_authors_' . $index . '_author_name'} = $author['first'] . " " . $author['last'];
-		    ${'paper_authors_' . $index . '_author_affiliations'} = $author['affiliation'];
-		    ${'paper_authors_' . $index . '_author_email'} = $author['email'];
+            if ( ( isset ($author['first']) && isset ($author['last']) ) ) {
+                ${'paper_authors_' . $index . '_author_name'} = $author['first'] . " " . $author['last'];
+            }
+            if ( isset ($author['affiliation']) ) {
+                ${'paper_authors_' . $index . '_author_affiliations'} = $author['affiliation'];
+            }
+            if ( isset ($author['email']) ) {
+                ${'paper_authors_' . $index . '_author_email'} = $author['email'];
+            }
 		    $index++;
         }
         $post_meta = array(
@@ -133,7 +139,8 @@ function ndss_button_action() {
             'paper_abstract' => $paper_abstract,
             'paper_id' => $paper_id,
         );
-	    $index = 0;
+        $index = 0;
+        $post_meta['display_authors'] = "";
 	    foreach( $authors as $author ) {
 		    $post_meta['paper_authors_' . $index . '_author_name'] = ${'paper_authors_' . $index . '_author_name'};
 		    $post_meta['paper_authors_' . $index . '_author_affiliations'] = ${'paper_authors_' . $index . '_author_affiliations'};
