@@ -6,11 +6,11 @@
 
 /*
 Plugin Name: NDSS Paper Import Plugin
-Plugin URI: github repo goes here
+Plugin URI: https://github.com/madofo/ndss-paper-import
 Description: This plugin will import json data exported from HotCRP to NDSS Paper post types.
 Author: Mat Ford
-Version: 1.0.0
-Author URI: https://
+Version: 1.1.0
+Author URI: https://github.com/madofo
 License: GPLv2 or later
 Text Domain: ndss-paper-import
  */
@@ -18,28 +18,6 @@ Text Domain: ndss-paper-import
 if ( ! defined( 'ABSPATH' ) ) {
     die;
 }
-
-// class NDSSPaperImportPlugin
-// {
-//     function activate() {
-//         flush_rewrite_rules();
-//     }
-
-//     function deactivate() {
-//         flush_rewrite_rules();
-//     }
-
-// }
-
-// if ( class_exists( 'NDSSPaperImportPlugin' ) ) {
-//     $ndssPaperImportPlugin = new NDSSPaperImportPlugin();
-// }
-
-// // activation
-// register_activation_hook( __FILE__, array( $ndssPaperImportPlugin, 'activate' ) );
-
-// // deactivation
-// register_deactivation_hook( __FILE__, array( $ndssPaperImportPlugin, 'deactivate' ) );
 
 add_action('admin_menu', 'ndss_button_menu');
 
@@ -51,7 +29,7 @@ function ndss_button_admin_page() {
 
     // This function creates the output for the admin page.
     // It also checks the value of the $_POST variable to see whether
-    // there has been a form submission. 
+    // there has been a form submission.
 
     // The check_admin_referer is a WordPress function that does some security
     // checking and is recommended good practice.
@@ -62,65 +40,79 @@ function ndss_button_admin_page() {
     }
 
     // Start building the page
-
     echo '<div class="wrap">';
+    echo '<h2>NDSS Paper Metadata Import Plugin</h2>';
+    echo '<p>Import JSON-formatted HotCRP output to NDSS Paper posts.';
+    echo '<p>Choose File to select a JSON-formatted data source.';
+    echo '<p>Set YEAR to format the PDF URL correctly, e.g. "2021" for NDSS 2021';
 
-    echo '<h2>NDSS Paper Import Plugin</h2>';
-
-    echo '<p>This will import json-formatted HotCRP output to NDSS Paper posts.</p>';
-
-    // Check whether the button has been pressed AND also check the nonce
-    if (isset($_POST['ndss_button']) && check_admin_referer('ndss_button_clicked')) {
-    // the button has been pressed AND we've passed the security check
-        ndss_button_action();
+    ?>
+    <?php
+    if (isset($_POST['year'])) {
+        $format_year = $_POST['year'];
+    } else {
+        $format_year = 'YYYY';
     }
+    handle_post();
 
-    echo '<form action="options-general.php?page=ndss-button-slug" method="post">';
+    ?>
+    <!-- Form to handle the upload - The enctype value here is very important -->
+    <form action="options-general.php?page=ndss-button-slug" method="post" enctype="multipart/form-data">
+    <input type="file" id="upload_ndss_papers_json" name="upload_ndss_papers_json"></input>
+    Year:  <input type="text" name="year" value="<?php echo $format_year; ?>"></input>
+    <p>Click on "Upload and Process NDSS paper metadata" to import to NDSS Paper posts.</p>
+    <?php wp_nonce_field("ndss_button_clicked"); ?>
+    <input type="hidden" value="true" name="ndss_button"></input>
+    <?php submit_button("Upload and Process NDSS paper metadata"); ?>
+    </form>
 
-    // this is a WordPress security feature - see: https://codex.wordpress.org/WordPress_Nonces
-    wp_nonce_field('ndss_button_clicked');
-    echo '<input type="hidden" value="true" name="ndss_button" />';
-    submit_button('Process NDSS papers');
-    echo '</form>';
-
+    <?php
     echo '</div>';
-
 }
 
-function ndss_button_action() {
+function handle_post() {
+    // First check that year is set
+    if (isset($_POST['year'])) {
+        $format_year = $_POST['year'];
+        // Then check if the file appears on the _FILES array AND we've passed the security check
+        if(isset($_FILES['upload_ndss_papers_json']) && check_admin_referer('ndss_button_clicked')){
+            $json_file = $_FILES['upload_ndss_papers_json'];
+ 
+            // Use the wordpress function to upload
+            // upload_ndss_papers_json corresponds to the position in the $_FILES array
+            // 0 means the content is not associated with any other posts
+            $uploaded=media_handle_upload('upload_ndss_papers_json', 0);
+            // Error checking using WP functions
+            if(is_wp_error($uploaded)){
+                echo "Error uploading file: " . $uploaded->get_error_message();
+            }else{
+                echo "File upload successful!";
+                ndss_button_action($uploaded, $format_year);
+            }
+        }
+    }
+}
+
+function ndss_button_action($id, $year) {
   
     echo '<div id="message" class="updated fade">';
-    echo '<p>NDSS data import complete.</p>';
+    echo '<p>NDSS paper metadata import complete.</p>';
+    echo '<p>Now is a good time to go to NDSS Papers, filter by Uncategorized and then bulk edit to Categorize the papers you just uploaded.</p>';
     echo '</div>';
 
-    // $path = __DIR__ . '/test-button-log.txt';
-
-    // $handle = fopen($path,"w");
-
-    // if ($handle == false) {
-    //     echo '<p>Could not write the log file to the temporary directory: ' . $path . '</p>';
-    // }
-    // else {
-    //     echo '<p>Log written to: ' . $path . '</p>';
-
-    //     fwrite ($handle , "Call Function button clicked on: " . date("D j M Y H:i:s", time())); 
-    //     fclose ($handle);
-    // }
-
     //Mass import json data into custom fields
-    // $json_feed = 'http://localhost/wordpress/wp-content/anrw17-data.json';
-    $json_feed = 'ndss19-data.json';
-	$json      = file_get_contents(__DIR__ . '/' . $json_feed );
+    $json_file = get_post($id);
+    $json      = file_get_contents(wp_get_attachment_url($id));
 	$objs      = json_decode( $json, true );
 	$wp_error  = true;
-	$post_id   = - 1;
+    $post_id   = - 1;
 
 	foreach ( $objs as $obj ) {
-	    $title = $obj['title'];
         $paper_title = $obj['title'];
         $paper_id = $obj['pid'];
 	    $paper_abstract  = $obj['abstract'];
-	    $authors = $obj['authors'];
+        $authors = $obj['authors'];
+        $paper_pdf = 'https://www.ndss-symposium.org/wp-content/uploads/' . $year . '-' . $paper_id . '-paper.pdf';
 	    $index = 0;
 	    foreach( $authors as $author ) {
             if ( ( isset ($author['first']) && isset ($author['last']) ) ) {
@@ -138,6 +130,7 @@ function ndss_button_action() {
 		    'paper_title' => $paper_title,
             'paper_abstract' => $paper_abstract,
             'paper_id' => $paper_id,
+            'paper_pdf' => $paper_pdf,
         );
         $index = 0;
         $post_meta['display_authors'] = "";
@@ -154,27 +147,28 @@ function ndss_button_action() {
         }
         $post_meta['paper_authors'] = (string)$index;
 	    $field_meta = array(
-            '_paper_title'    => 'field_5bbcbcd8f654e',
-            '_paper_abstract' => 'field_5bbcbd2cf654f',
-            '_paper_authors'  => 'field_5bbcbd5bf6550',
-            '_display_authors' => 'field_5bbcec6e47a54',
+            '_paper_title'     => 'field_5bed8927f3e63',
+            '_paper_abstract'  => 'field_5bed893cf3e64',
+            '_paper_authors'   => 'field_5bed8949f3e65',
+            '_display_authors' => 'field_5bed8966f3e66',
+            '_paper_pdf'       => 'field_5bed8975f3e67',
 	    );
 	    $index = 0;
 	    foreach( $authors as $author ) {
-		    $field_meta['_paper_authors_' . $index . '_author_name'] = 'field_5bbcbd7cf6551';
-		    $field_meta['_paper_authors_' . $index . '_author_affiliations'] = 'field_5bbcbd87f6552';
-		    $field_meta['_paper_authors_' . $index . '_author_email'] = 'field_5bbcbd9af6553';
+		    $field_meta['_paper_authors_' . $index . '_author_name'] = 'field_5bed8bb4ec481';
+		    $field_meta['_paper_authors_' . $index . '_author_affiliations'] = 'field_5bed8bc5ec482';
+		    $field_meta['_paper_authors_' . $index . '_author_email'] = 'field_5bed8bdbec483';
 		    $index++;
         }
   	    $post_data = array(
-		    'post_title'  => $title,
+		    'post_title'  => $paper_title,
 		    'post_status' => 'publish',
 		    'post_type'   => 'ndss-paper',
 		    'meta_input'  => $post_meta,
 	    );
-        
-        $page = get_page_by_title( $title, OBJECT, 'ndss-paper' );
-        // var_dump($page);
+
+        $page = get_page_by_title( $paper_title, OBJECT, 'ndss-paper' );
+        // var_dump($post_meta);
 
 	    if ( empty( $page ) ) {
 		    $post_id = wp_insert_post( $post_data, $wp_error );
@@ -189,7 +183,6 @@ function ndss_button_action() {
             $post_id = $page->ID;
             $post_data['ID'] = $post_id;
             wp_update_post( $post_data );
-            // var_dump ( $post_meta );
             foreach ( $post_meta as $key => $value ) {
                 update_post_meta( $post_id, $key, $value );
             }
@@ -197,5 +190,5 @@ function ndss_button_action() {
                 update_field( $key, $value, $post_id );
             }
 	    }
-	}
+    }
 }
